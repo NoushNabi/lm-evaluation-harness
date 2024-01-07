@@ -104,7 +104,6 @@ class OPTIMUM(LM):
             assert isinstance(pretrained, str)
             assert isinstance(batch_size, (int, str))
 
-            #gpus = torch.cuda.device_count()
             accelerator = Accelerator()
 
             if not (parallelize or accelerator.num_processes > 1):
@@ -117,14 +116,7 @@ class OPTIMUM(LM):
                 if device and device in device_list:
                     self._device = torch.device(device)
                     eval_logger.info(f"Using device '{device}'")
-                    """
-                    if device in ("mps", "mps:0") and version.parse(
-                        torch.__version__
-                    ) < version.parse("2.1"):
-                        raise RuntimeError(
-                            f"mps requires torch >= 2.1. You have {torch.__version__}"
-                        )
-                    """
+
                 else:
                     eval_logger.info("Device not specified")
                     eval_logger.info(f"Cuda Available? {torch.cuda.is_available()}")
@@ -133,15 +125,6 @@ class OPTIMUM(LM):
                         if torch.cuda.is_available()
                         else torch.device("cpu")
                     )
-            """
-            else:
-                if device != "cuda":
-                    eval_logger.info(
-                        f"Using `accelerate launch` or `parallelize=True`, device '{device}' will be overridden when placing model."
-                    )
-                # TODO: include in warning that `load_in_8bit` etc. affect this too
-                self._device = torch.device(device)
-            """
             
             # TODO: update this to be less of a hack once subfolder is fixed in HF
             revision = revision + ("/" + subfolder if subfolder is not None else "")
@@ -174,22 +157,6 @@ class OPTIMUM(LM):
                 **kwargs,
             )
 
-        # access self._model through self.model property outside this method
-        # self.model.eval()
-        # self.model.tie_weights()
-
-#        if isinstance(pretrained, str) and (gpus >= 1 or str(self.device) == "mps"):
-#            if not (parallelize or autogptq or ("device_map" in kwargs)):
-#                # place model onto device requested manually,
-#                # if not using HF Accelerate or device_map
-#                # or any other option that preloads model onto device
-#                try:
-#                    self.model.to(self.device)
-#                except ValueError:
-#                    eval_logger.info(
-#                        "Failed to place model onto specified device. This may be because the model is quantized via `bitsandbytes`. If the desired GPU is being used, this message is safe to ignore."
-#                    )
-#
         self._create_tokenizer(
             pretrained,
             tokenizer,
@@ -228,59 +195,7 @@ class OPTIMUM(LM):
         else:
             self.batch_size_per_gpu = int(batch_size)
 
-#        if isinstance(pretrained, str):
-#            # multigpu data-parallel support when launched with accelerate
-#            if gpus > 1:
-#                if parallelize:
-#                    if accelerator.num_processes > 1:
-#                        raise RuntimeError(
-#                            "Attempted to use both a HF Accelerate `device_map` and to launch via `accelerate launch`. If this is the case, please either remove `parallelize=True` from --model_args or launch outside of the Accelerate launcher."
-#                        )
-#                    else:
-#                        pass
-#                elif accelerator.num_processes == 1:
-#                    # if we aren't launching via accelerate, ditch
-#                    self._rank = 0
-#                    self._world_size = 1
-#                else:
-#                    if gpus > accelerator.num_processes:
-#                        eval_logger.warning(
-#                            "WARNING: The number of total system GPUs does not match the number of spawned processes. "
-#                            "If you would like to use data parallelism, please launch the script "
-#                            "with 'accelerate launch *script*'. "
-#                            f"Current run will proceed with {accelerator.num_processes} devices."
-#                        )
-#                    assert (
-#                        accelerator.distributed_type
-#                        in [
-#                            DistributedType.FSDP,
-#                            DistributedType.MULTI_GPU,
-#                        ]
-#                    ), "Unsupported distributed type provided. Only DDP and FSDP are supported."
-#                    if accelerator.distributed_type == DistributedType.FSDP:
-#                        self._model = accelerator.prepare(self.model)
-#                    else:
-#                        self._model = accelerator.prepare_model(
-#                            self.model, evaluation_mode=True
-#                        )
-#                    self._device = torch.device(
-#                        f"cuda:{accelerator.local_process_index}"
-#                    )
-#                    self.accelerator = accelerator
-#
-#                    if self.accelerator.is_local_main_process:
-#                        eval_logger.info(f"Using {gpus} devices with data parallelism")
-#
-#                    self._rank = self.accelerator.local_process_index
-#                    self._world_size = self.accelerator.num_processes
-#        else:
-#            # if a PreTrainedModel was passed into HFLM, we forgo distributed setup.
-#            eval_logger.warning(
-#                "Passed an already-initialized model through `pretrained`, assuming single-process call to evaluate() or custom distributed integration"
-#            )
-#            self._rank = 0
-#            self._world_size = 1
-#
+
     @property
     def config(self):
         # return the associated transformers.AutoConfig for the given pretrained model.
