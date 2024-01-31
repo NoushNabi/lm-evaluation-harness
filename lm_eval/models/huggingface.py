@@ -24,6 +24,7 @@ from lm_eval.utils import Collator, stop_sequences_criteria
 
 
 eval_logger = utils.eval_logger
+inp = []
 
 
 def _get_accelerate_args(
@@ -62,6 +63,7 @@ class HFLM(LM):
 
     AUTO_MODEL_CLASS = None
     _DEFAULT_MAX_LENGTH = 2048
+    inplen = None
 
     def __init__(
         self,
@@ -108,7 +110,6 @@ class HFLM(LM):
             assert not parallelize, "`parallelize=True` is not compatible with passing pre-initialized model to `pretrained`"
             self._model = pretrained
             self._device = self._model.device
-
             self._config = self._model.config
 
             if tokenizer:
@@ -127,6 +128,7 @@ class HFLM(LM):
                 )
 
         else:
+            print("\n\nbackend-1 in HFLM: ", backend)
             assert isinstance(device, str)
             assert isinstance(pretrained, str)
             assert isinstance(batch_size, (int, str))
@@ -168,6 +170,9 @@ class HFLM(LM):
                 # TODO: include in warning that `load_in_8bit` etc. affect this too
                 self._device = torch.device(device)
 
+            print("\n\ndevice in HFLM: ", device)
+            print("self._device in HFLM: ", self._device)
+            
             # TODO: update this to be less of a hack once subfolder is fixed in HF
             revision = revision + ("/" + subfolder if subfolder is not None else "")
 
@@ -181,9 +186,12 @@ class HFLM(LM):
         self._get_backend(
             config=self.config, backend=backend, trust_remote_code=trust_remote_code
         )
-
+        print("\n\nbackend-2 in HFLM: ", backend)
+        self._backend = backend
+        
         # if we passed `pretrained` as a string, initialize our model now
         if isinstance(pretrained, str):
+            print("\n\ncreate model in HFLM: ", device)
             self._create_model(
                 pretrained=pretrained,
                 revision=revision,
@@ -441,6 +449,7 @@ class HFLM(LM):
         # PEFT and quantization options
         peft: Optional[str] = None,
         autogptq: Optional[Union[bool, str]] = False,
+        #backend: str = "causal",
         **kwargs,
     ) -> None:
         """
@@ -705,12 +714,10 @@ class HFLM(LM):
                 return self.model(inps).logits
 
     def _model_generate(self, context, max_length, stop, **generation_kwargs):
-        # if do_sample is false and temp==0.0:
-        # remove temperature, as do_sample=False takes care of this
-        # and we don't want a warning from HF
-        do_sample = generation_kwargs.get("do_sample", None)
-        if do_sample is False and "temperature" == 0.0:
-            generation_kwargs.pop("temperature", 0.0)
+        # we require users to pass do_sample=True explicitly
+        # for non-greedy gen. This should be reevaluated when considering beam search.
+        if "do_sample" not in generation_kwargs:
+            generation_kwargs["do_sample"] = False
         # build stopping criteria
         stopping_criteria = stop_sequences_criteria(
             self.tokenizer, stop, context.shape[1], context.shape[0]
@@ -856,6 +863,8 @@ class HFLM(LM):
     ) -> List[Tuple[float, bool]]:
         # TODO: implement some kind of efficient-request-middleware that lumps together requests with the same context
         res = []
+        inplen = None
+        inps = []
 
         def _collate(x):
             """Defines the key for the sorted method"""
