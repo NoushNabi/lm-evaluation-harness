@@ -24,16 +24,7 @@ class OptimumLM(HFLM):
     Intel® architectures using OpenVINO™ runtime.
     """
     AUTO_MODEL_CLASS = None
-    #inplen = None
-    """
-    if not find_spec("optimum"):
-        raise Exception(
-            "package `optimum` is not installed. Please install it via `pip install optimum[openvino]`"
-        )
-    else:
-        from optimum.intel.openvino import OVModelForCausalLM
-    """
-    print("\n\nWelcome to Optimum Class........")
+
     def __init__(
         self,
         pretrained="gpt2",
@@ -53,7 +44,7 @@ class OptimumLM(HFLM):
             **kwargs,
         )
 
-        revision = revision + ("/" + subfolder if subfolder is not None else "")
+        #revision = revision + ("/" + subfolder if subfolder is not None else "")
         
         self._get_config(
             pretrained,
@@ -61,12 +52,12 @@ class OptimumLM(HFLM):
             trust_remote_code=trust_remote_code,
         )
         print("\n\nOptimum done with _get_config")
-        # determine which of 'causal' and 'seq2seq' backends to use
+        
         self._get_backend(
             config=self.config, backend=backend, trust_remote_code=trust_remote_code
         )
         print("\n\nOptimum done with _get_backend")
-        self._backend = backend
+        #self._backend = backend
 
     def _create_model(
         self,
@@ -93,16 +84,10 @@ class OptimumLM(HFLM):
             device=self.openvino_device.upper(),
             **model_kwargs,
         )
-        if self._model is None:
-            print("\n\nOptimum model is None!!!!")
-        else:
-            print("\n\nOptimum model is: ", self._model)
-
 
     def _get_backend(
         self,
         config: transformers.AutoConfig,
-        #config,
         backend="default",
         trust_remote_code=False,
     ) -> None:
@@ -110,7 +95,6 @@ class OptimumLM(HFLM):
         assert backend in ["default", "causal", "seq2seq"]
 
         if backend != "default":
-            # if we've settled on non-default backend, use that manually
             if backend == "causal":
                 self.AUTO_MODEL_CLASS = OVModelForCausalLM
             elif backend == "seq2seq":
@@ -119,14 +103,10 @@ class OptimumLM(HFLM):
                 f"Overrode Optimum model backend type, and using type '{backend}'"
             )
         else:
-            # determine and use the default HF backend for this model, based on its config + metadata.
             if (
                 getattr(config, "model_type")
                 in MODEL_FOR_SEQ_TO_SEQ_CAUSAL_LM_MAPPING_NAMES
             ):
-                # first check if model type is listed under seq2seq models, since some
-                # models like MBart are listed in both seq2seq and causal mistakenly in HF transformers.
-                # these special cases should be treated as seq2seq models.
                 self.AUTO_MODEL_CLASS = OVModelForSeq2SeqLM
             elif (
                 getattr(self.config, "model_type") in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
@@ -138,8 +118,6 @@ class OptimumLM(HFLM):
                         "HF model type is neither marked as CausalLM or Seq2SeqLM. \
                     This is expected if your model requires `trust_remote_code=True` but may be an error otherwise."
                     )
-                # if model type is neither in HF transformers causal or seq2seq model registries
-                # then we default to AutoModelForCausalLM
                 self.AUTO_MODEL_CLASS = OVModelForCausalLM
        
         assert self.AUTO_MODEL_CLASS in [

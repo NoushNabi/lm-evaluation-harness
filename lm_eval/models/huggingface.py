@@ -64,7 +64,6 @@ class HFLM(LM):
 
     AUTO_MODEL_CLASS = None
     _DEFAULT_MAX_LENGTH = 2048
-    print("\n\nWelcome to huggingface Class ........")
 
     def __init__(
         self,
