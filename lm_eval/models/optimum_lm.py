@@ -24,7 +24,7 @@ class OptimumLM(HFLM):
     Intel® architectures using OpenVINO™ runtime.
     """
     AUTO_MODEL_CLASS = None
-    inplen = None
+    #inplen = None
     """
     if not find_spec("optimum"):
         raise Exception(
@@ -33,7 +33,7 @@ class OptimumLM(HFLM):
     else:
         from optimum.intel.openvino import OVModelForCausalLM
     """
-
+    print("\n\nWelcome to Optimum Class........")
     def __init__(
         self,
         pretrained="gpt2",
@@ -60,11 +60,12 @@ class OptimumLM(HFLM):
             revision=revision,
             trust_remote_code=trust_remote_code,
         )
-
+        print("\n\nOptimum done with _get_config")
         # determine which of 'causal' and 'seq2seq' backends to use
         self._get_backend(
             config=self.config, backend=backend, trust_remote_code=trust_remote_code
         )
+        print("\n\nOptimum done with _get_backend")
         self._backend = backend
 
     def _create_model(
@@ -75,6 +76,7 @@ class OptimumLM(HFLM):
         trust_remote_code=False,
         **kwargs,
     ) -> None:
+        print("\n\nWelcome to Optimum _create_model method.....")
         model_kwargs = kwargs if kwargs else {}
         model_file = Path(pretrained) / "openvino_model.xml"
         if model_file.exists():
@@ -91,6 +93,10 @@ class OptimumLM(HFLM):
             device=self.openvino_device.upper(),
             **model_kwargs,
         )
+        if self._model is None:
+            print("\n\nOptimum model is None!!!!")
+        else:
+            print("\n\nOptimum model is: ", self._model)
 
 
     def _get_backend(
@@ -100,6 +106,7 @@ class OptimumLM(HFLM):
         backend="default",
         trust_remote_code=False,
     ) -> None:
+        print("\n\nWelcome to Optimum _get_backend method.....")
         assert backend in ["default", "causal", "seq2seq"]
 
         if backend != "default":

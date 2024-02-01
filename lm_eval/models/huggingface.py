@@ -22,9 +22,10 @@ from lm_eval.api.model import LM
 from lm_eval.api.registry import register_model
 from lm_eval.utils import Collator, stop_sequences_criteria
 
+import optimum
+from optimum.intel.openvino import OVModelForCausalLM, OVModelForSeq2SeqLM
 
 eval_logger = utils.eval_logger
-inp = []
 
 
 def _get_accelerate_args(
@@ -63,7 +64,7 @@ class HFLM(LM):
 
     AUTO_MODEL_CLASS = None
     _DEFAULT_MAX_LENGTH = 2048
-    inplen = None
+    print("\n\nWelcome to huggingface Class ........")
 
     def __init__(
         self,
@@ -110,6 +111,7 @@ class HFLM(LM):
             assert not parallelize, "`parallelize=True` is not compatible with passing pre-initialized model to `pretrained`"
             self._model = pretrained
             self._device = self._model.device
+
             self._config = self._model.config
 
             if tokenizer:
@@ -128,7 +130,7 @@ class HFLM(LM):
                 )
 
         else:
-            print("\n\nbackend-1 in HFLM: ", backend)
+            print("\n\nHF just started.....: ", backend)
             assert isinstance(device, str)
             assert isinstance(pretrained, str)
             assert isinstance(batch_size, (int, str))
@@ -170,9 +172,7 @@ class HFLM(LM):
                 # TODO: include in warning that `load_in_8bit` etc. affect this too
                 self._device = torch.device(device)
 
-            print("\n\ndevice in HFLM: ", device)
-            print("self._device in HFLM: ", self._device)
-            
+            print("\n\nHF _get_config will start now....: ", device)
             # TODO: update this to be less of a hack once subfolder is fixed in HF
             revision = revision + ("/" + subfolder if subfolder is not None else "")
 
@@ -181,17 +181,15 @@ class HFLM(LM):
                 revision=revision,
                 trust_remote_code=trust_remote_code,
             )
-
+        print("\n\nHF _get_backend will start now....: ")
         # determine which of 'causal' and 'seq2seq' backends to use
         self._get_backend(
             config=self.config, backend=backend, trust_remote_code=trust_remote_code
         )
-        print("\n\nbackend-2 in HFLM: ", backend)
-        self._backend = backend
         
+        print("\n\nHF _create_model will start now....: ", device)
         # if we passed `pretrained` as a string, initialize our model now
         if isinstance(pretrained, str):
-            print("\n\ncreate model in HFLM: ", device)
             self._create_model(
                 pretrained=pretrained,
                 revision=revision,
@@ -206,7 +204,7 @@ class HFLM(LM):
                 autogptq=autogptq,
                 **kwargs,
             )
-
+        print("\n\nHF done with _create_model")
         # access self._model through self.model property outside this method
         if isinstance(self.model, torch.nn.Module):
             self.model.eval()
@@ -225,6 +223,7 @@ class HFLM(LM):
                         "Failed to place model onto specified device. This may be because the model is quantized via `bitsandbytes` or `device_map` is provided. If the desired GPU is being used, this message is safe to ignore."
                     )
 
+        print("\n\nHF start _create_tokenizer")
         self._create_tokenizer(
             pretrained,
             tokenizer,
@@ -426,6 +425,7 @@ class HFLM(LM):
         revision: str = "main",
         trust_remote_code: bool = False,
     ) -> None:
+        print("\n\nWelcome to HF _get_config method.....")
         self._config = transformers.AutoConfig.from_pretrained(
             pretrained,
             revision=revision,
@@ -449,7 +449,6 @@ class HFLM(LM):
         # PEFT and quantization options
         peft: Optional[str] = None,
         autogptq: Optional[Union[bool, str]] = False,
-        #backend: str = "causal",
         **kwargs,
     ) -> None:
         """
@@ -463,7 +462,7 @@ class HFLM(LM):
         HF's public interface relied on in this HFLM class)
         please consider subclassing HFLM and overriding this and other methods as needed.
         """
-
+        print("\n\nWelcome to HF _create_model method.....")
         model_kwargs = kwargs if kwargs else {}
 
         if parallelize:
@@ -553,7 +552,7 @@ class HFLM(LM):
         Create a tokenizer object corresponding to the correct
         tokenizer for value of `pretrained`, or use the pre-initialized tokenizer passed.
         """
-
+        print("\n\nWelcome to HF _create_tokenizer method.....")
         if tokenizer:
             if isinstance(tokenizer, str):
                 self.tokenizer = transformers.AutoTokenizer.from_pretrained(
@@ -583,6 +582,7 @@ class HFLM(LM):
         return None
 
     def _detect_batch_size(self, requests=None, pos: int = 0):
+        print("\n\nWelcome to HF _detect_batch_size method.....")
         if requests:
             _, context_enc, continuation_enc = requests[pos]
             max_length = len(
@@ -634,11 +634,11 @@ class HFLM(LM):
     def tok_encode(
         self, string: str, left_truncate_len=None, add_special_tokens=None
     ) -> List[int]:
-        """ """
+        print("\nWelcome to HF tok_encode method.....")
         if add_special_tokens is None:
-            if self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM:
+            if (self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM or self.AUTO_MODEL_CLASS == OVModelForCausalLM):
                 add_special_tokens = False
-            elif self.AUTO_MODEL_CLASS == transformers.AutoModelForSeq2SeqLM:
+            elif (self.AUTO_MODEL_CLASS == transformers.AutoModelForSeq2SeqLM or self.AUTO_MODEL_CLASS == OVModelForSeq2SeqLM) :
                 add_special_tokens = True
 
         encoding = self.tokenizer.encode(string, add_special_tokens=add_special_tokens)
@@ -656,13 +656,14 @@ class HFLM(LM):
         left_truncate_len: int = None,
         truncation: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        print("\n\nWelcome to HF tok_batch_encode method.....")
         # encode a batch of strings. converts to tensors and pads automatically, unlike tok_encode.
         old_padding_side = self.tokenizer.padding_side
         self.tokenizer.padding_side = padding_side
 
-        if self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM:
+        if (self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM or self.AUTO_MODEL_CLASS == OVModelForCausalLM):
             add_special_tokens = False
-        elif self.AUTO_MODEL_CLASS == transformers.AutoModelForSeq2SeqLM:
+        elif (self.AUTO_MODEL_CLASS == transformers.AutoModelForSeq2SeqLM or self.AUTO_MODEL_CLASS == OVModelForSeq2SeqLM):
             add_special_tokens = True
 
         encoding = self.tokenizer(
@@ -682,9 +683,10 @@ class HFLM(LM):
         return encoding["input_ids"], encoding["attention_mask"]
 
     def tok_decode(self, tokens):
-        if self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM:
+        print("\nWelcome to HF tok_decode method.....")
+        if (self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM or self.AUTO_MODEL_CLASS == OVModelForCausalLM):
             return self.tokenizer.decode(tokens)
-        elif self.AUTO_MODEL_CLASS == transformers.AutoModelForSeq2SeqLM:
+        elif (self.AUTO_MODEL_CLASS == transformers.AutoModelForSeq2SeqLM or self.AUTO_MODEL_CLASS == OVModelForSeq2SeqLM):
             return self.tokenizer.decode(tokens, skip_special_tokens=True)
 
     def _model_call(self, inps, attn_mask=None, labels=None):
@@ -702,6 +704,7 @@ class HFLM(LM):
             A torch tensor of shape [batch, sequence, vocab] with the
         logits returned from the model's decoder
         """
+        print("\nWelcome to HF _model_call method.....")
         with torch.no_grad():
             if attn_mask is not None or labels is not None:
                 assert attn_mask is not None and labels is not None
@@ -710,14 +713,16 @@ class HFLM(LM):
                     input_ids=inps, attention_mask=attn_mask, labels=labels
                 ).logits
             else:
-                assert self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM
+                assert (self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM or self.AUTO_MODEL_CLASS == OVModelForCausalLM)
                 return self.model(inps).logits
 
     def _model_generate(self, context, max_length, stop, **generation_kwargs):
-        # we require users to pass do_sample=True explicitly
-        # for non-greedy gen. This should be reevaluated when considering beam search.
-        if "do_sample" not in generation_kwargs:
-            generation_kwargs["do_sample"] = False
+        # if do_sample is false and temp==0.0:
+        # remove temperature, as do_sample=False takes care of this
+        # and we don't want a warning from HF
+        do_sample = generation_kwargs.get("do_sample", None)
+        if do_sample is False and "temperature" == 0.0:
+            generation_kwargs.pop("temperature", 0.0)
         # build stopping criteria
         stopping_criteria = stop_sequences_criteria(
             self.tokenizer, stop, context.shape[1], context.shape[0]
@@ -862,9 +867,11 @@ class HFLM(LM):
         override_bs: int = None,
     ) -> List[Tuple[float, bool]]:
         # TODO: implement some kind of efficient-request-middleware that lumps together requests with the same context
+        print("\n\nWelcome to HF _loglikelihood_tokens method.....")
         res = []
         inplen = None
-        inps = []
+        inp = None
+        batched_inps = None
 
         def _collate(x):
             """Defines the key for the sorted method"""
@@ -928,7 +935,7 @@ class HFLM(LM):
                 # cont_toks      4 5 6 7 8 9      [:, -len(continuation_enc):, :self.vocab_size] slice
 
                 # when too long to fit in context, truncate from the left
-                if self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM:
+                if (self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM or self.AUTO_MODEL_CLASS == OVModelForCausalLM):
                     inp = torch.tensor(
                         (context_enc + continuation_enc)[-(self.max_length + 1) :][:-1],
                         dtype=torch.long,
@@ -975,7 +982,7 @@ class HFLM(LM):
 
             # create encoder attn mask and batched conts, if seq2seq
             call_kwargs = {}
-            if self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM:
+            if (self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM or self.AUTO_MODEL_CLASS == OVModelForCausalLM):
                 batched_inps = utils.pad_and_concat(
                     padding_len_inp, inps, padding_side="right"
                 )  # [batch, padding_len_inp]
@@ -1010,7 +1017,7 @@ class HFLM(LM):
                 # from prompt/prefix tuning tokens, if applicable
                 ctx_len = (
                     inplen + (logits.shape[0] - padding_len_inp)
-                    if self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM
+                    if (self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM or self.AUTO_MODEL_CLASS == OVModelForCausalLM)
                     else None
                 )
                 logits = self._select_cont_toks(logits, contlen=contlen, inplen=ctx_len)
@@ -1110,7 +1117,7 @@ class HFLM(LM):
                 max_gen_toks = self.max_gen_toks
 
             # set the max length in tokens of inputs ("context_enc")
-            if self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM:
+            if (self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM or self.AUTO_MODEL_CLASS == OVModelForCausalLM):
                 # max len for inputs = max length, minus room to generate the max new tokens
                 max_ctx_len = self.max_length - max_gen_toks
             elif self.AUTO_MODEL_CLASS == transformers.AutoModelForSeq2SeqLM:
@@ -1140,7 +1147,7 @@ class HFLM(LM):
             cont_toks_list = cont.tolist()
             for cont_toks, context in zip(cont_toks_list, contexts):
                 # discard context + left-padding toks if using causal decoder-only LM
-                if self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM:
+                if (self.AUTO_MODEL_CLASS == transformers.AutoModelForCausalLM or self.AUTO_MODEL_CLASS == OVModelForCausalLM):
                     cont_toks = cont_toks[context_enc.shape[1] :]
 
                 s = self.tok_decode(cont_toks)
