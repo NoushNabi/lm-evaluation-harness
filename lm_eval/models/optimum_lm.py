@@ -43,8 +43,6 @@ class OptimumLM(HFLM):
             backend=kwargs.get("backend", "causal"),
             **kwargs,
         )
-
-        #revision = revision + ("/" + subfolder if subfolder is not None else "")
         
         self._get_config(
             pretrained,
@@ -57,7 +55,6 @@ class OptimumLM(HFLM):
             config=self.config, backend=backend, trust_remote_code=trust_remote_code
         )
         print("\n\nOptimum done with _get_backend")
-        #self._backend = backend
 
     def _create_model(
         self,
@@ -74,7 +71,11 @@ class OptimumLM(HFLM):
             export = False
         else:
             export = True
-        kwargs["ov_config"] = {"PERFORMANCE_HINT": "LATENCY","NUM_STREAMS": "1", "CACHE_DIR": "",}
+        kwargs["ov_config"] = {
+            "PERFORMANCE_HINT": "LATENCY",
+            "NUM_STREAMS": "1",
+            "CACHE_DIR": "",
+        }
         
         self._model = self.AUTO_MODEL_CLASS.from_pretrained(
             pretrained,
